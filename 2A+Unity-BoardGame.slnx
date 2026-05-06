@@ -2,5 +2,6 @@
   <Project Path="ChungToi.Core.csproj" />
   <Project Path="ChungToi.Core.Tests.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="ChungToi.AI.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>
