@@ -1,0 +1,14 @@
+{
+	"name": "ChungToi.View",
+	"rootNamespace": "ChungToi.View",
+	"references": ["ChungToi.Core"],
+	"includePlatforms": [],
+	"excludePlatforms": [],
+	"allowUnsafeCode": false,
+	"overrideReferences": false,
+	"precompiledReferences": [],
+	"autoReferenced": true,
+	"defineConstraints": [],
+	"versionDefines": [],
+	"noEngineReferences": false
+}

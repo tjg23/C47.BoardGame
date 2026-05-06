@@ -1,7 +1,10 @@
 ﻿<Solution>
   <Project Path="ChungToi.Core.csproj" />
+  <Project Path="ChungToi.View.csproj" />
   <Project Path="ChungToi.Core.Tests.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="ChungToi.AI.csproj" />
+  <Project Path="ChungToi.AI.Tests.csproj" />
+  <Project Path="ChungToi.View.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>
