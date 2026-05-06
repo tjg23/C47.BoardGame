@@ -104,6 +104,9 @@ namespace ChungToi.View
 					bool light = ((r + c) % 2) == 0;
 					ApplyColor(quad, light ? CellLight : CellDark);
 
+					// Tag the quad so the input layer can map a raycast hit back to a Coord.
+					quad.AddComponent<CellRef>().Set(new Coord(r, c));
+
 					// The quad's collider is a MeshCollider on a single quad — fine for input later.
 					_cells[r, c] = quad;
 				}

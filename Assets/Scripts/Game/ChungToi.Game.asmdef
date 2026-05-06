@@ -1,14 +1,12 @@
 {
-    "name": "ChungToi.View.Editor",
-    "rootNamespace": "ChungToi.View.Editor",
+    "name": "ChungToi.Game",
+    "rootNamespace": "ChungToi.Game",
     "references": [
         "ChungToi.Core",
         "ChungToi.View",
-        "ChungToi.Game"
+        "Unity.InputSystem"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
