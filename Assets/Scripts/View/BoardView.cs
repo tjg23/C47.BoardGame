@@ -131,6 +131,11 @@ namespace ChungToi.View
 			float yRot = cell.Orient == Orientation.Cardinal ? 0f : 45f;
 			piece.transform.rotation = Quaternion.Euler(0f, yRot, 0f);
 
+			// Pieces are visual-only — disable the auto-attached BoxCollider so raycasts pass
+			// through to the cell underneath. The cell's CellRef supplies the Coord either way.
+			var col = piece.GetComponent<Collider>();
+			if (col != null) Destroy(col);
+
 			ApplyColor(piece, cell.Owner == Player.X ? XColor : OColor);
 			return piece;
 		}

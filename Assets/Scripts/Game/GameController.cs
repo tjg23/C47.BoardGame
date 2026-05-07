@@ -9,11 +9,13 @@ namespace ChungToi.Game
 {
     /// <summary>
     /// Top-level orchestrator. Owns the <see cref="GameState"/>, the <see cref="BoardView"/>, the
-    /// <see cref="InputController"/>, and an <see cref="IPlayer"/> for each side. Runs the game
-    /// loop: ask the side-to-move player for a move, apply, render, repeat.
+    /// <see cref="InputController"/>, the <see cref="HighlightOverlay"/>, and an <see cref="IPlayer"/>
+    /// for each side. Runs the game loop: ask the side-to-move player for a move, apply, render,
+    /// repeat.
     ///
-    /// Step 4 wires both sides to <see cref="HumanPlayer"/> instances. Step 6 will swap one or
-    /// both for an <c>AIPlayer</c>; nothing else here needs to change.
+    /// Highlight refreshes are driven by <see cref="HumanPlayer.SelectionChanged"/> — both humans'
+    /// events route through a single handler that redraws based on whichever side is currently
+    /// expected to move.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GameController : MonoBehaviour
@@ -35,10 +37,9 @@ namespace ChungToi.Game
 
         private BoardView _view;
         private InputController _input;
+        private HighlightOverlay _highlight;
         private CancellationTokenSource _cts;
 
-        // Convenience for HUD: the human (if any) currently expected to move. null when the
-        // current side is an AI — Step 6 will start returning null sometimes.
         public HumanPlayer CurrentHuman
         {
             get
@@ -72,6 +73,8 @@ namespace ChungToi.Game
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            if (HumanX != null) HumanX.SelectionChanged -= OnSelectionChanged;
+            if (HumanO != null) HumanO.SelectionChanged -= OnSelectionChanged;
             HumanX?.Dispose();
             HumanO?.Dispose();
         }
@@ -82,6 +85,7 @@ namespace ChungToi.Game
         {
             State = new GameState(Size);
             _view.Render(State.Board);
+            RefreshHighlights();
 
             while (State.Phase != GamePhase.GameOver)
             {
@@ -91,8 +95,10 @@ namespace ChungToi.Game
 
                 Rules.Apply(State, move);
                 _view.Render(State.Board);
+                RefreshHighlights();
             }
 
+            _highlight.Clear();
             Debug.Log(State.Winner == Player.None
                 ? "Game ended in a draw."
                 : $"Game over — {State.Winner} wins.");
@@ -120,6 +126,16 @@ namespace ChungToi.Game
                 _input = go.AddComponent<InputController>();
             }
 
+            // HighlightOverlay (child of BoardView so it inherits the board's transform)
+            _highlight = GetComponentInChildren<HighlightOverlay>();
+            if (_highlight == null)
+            {
+                var go = new GameObject("Highlights");
+                go.transform.SetParent(_view.transform, false);
+                _highlight = go.AddComponent<HighlightOverlay>();
+            }
+            _highlight.View = _view;
+
             // Camera
             if (RaycastCamera == null) RaycastCamera = Camera.main;
             if (RaycastCamera == null)
@@ -137,6 +153,23 @@ namespace ChungToi.Game
             HumanO = new HumanPlayer(_input);
             XPlayer = HumanX;
             OPlayer = HumanO;
+
+            HumanX.SelectionChanged += OnSelectionChanged;
+            HumanO.SelectionChanged += OnSelectionChanged;
+        }
+
+        private void OnSelectionChanged() => RefreshHighlights();
+
+        private void RefreshHighlights()
+        {
+            if (_highlight == null || State == null) return;
+            if (State.Phase == GamePhase.GameOver) { _highlight.Clear(); return; }
+
+            var human = CurrentHuman;
+            if (human == null || !human.SelectedPiece.HasValue)
+                _highlight.Clear();
+            else
+                _highlight.Show(human.SelectedPiece, human.SlideDestinations, State.Board.Size);
         }
 
         private void FrameCamera()

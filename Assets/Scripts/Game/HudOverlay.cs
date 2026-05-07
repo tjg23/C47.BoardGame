@@ -56,12 +56,22 @@ namespace ChungToi.Game
             _winnerLabel.gameObject.SetActive(false);
             _turnLabel.text = $"Turn: {state.ToMove}";
 
-            // Orientation indicator: human only, placement only (Step 4 scope).
             var human = Controller.CurrentHuman;
-            if (human != null && state.Phase == GamePhase.Placement)
-                _orientLabel.text = $"Place orientation: {human.CurrentOrientation}  (R to flip)";
-            else
-                _orientLabel.text = "";
+            _orientLabel.text = ComposeStatusLine(state, human);
+        }
+
+        private static string ComposeStatusLine(GameState state, HumanPlayer human)
+        {
+            if (human == null) return ""; // AI's turn (Step 6+)
+
+            if (state.Phase == GamePhase.Placement)
+                return $"Place orientation: {human.CurrentOrientation}  (R to flip)";
+
+            // Movement phase.
+            if (!human.SelectedPiece.HasValue)
+                return "Click your piece to select  ·  Esc to cancel  ·  R to rotate during slide";
+
+            return $"Slide orientation: {human.SlideOrientation}  (R to flip, click own piece to rotate-in-place, Esc to deselect)";
         }
 
         // ---- helpers ----
