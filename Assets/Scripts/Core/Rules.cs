@@ -207,9 +207,11 @@ namespace ChungToi.Core
 							int nc = from.Col + dc * dist;
 							if (nr < 0 || nr >= n || nc < 0 || nc >= n) break;
 							var to = new Coord(nr, nc);
-							if (!board.IsEmpty(to)) break; // no jumping, no captures
-							moves.Add(Move.Slide(from, to, cell.Orient));
-							moves.Add(Move.Slide(from, to, toggled));
+							if (board.IsEmpty(to))
+							{
+								moves.Add(Move.Slide(from, to, cell.Orient));
+								moves.Add(Move.Slide(from, to, toggled));
+							}
 							dist++;
 						}
 					}

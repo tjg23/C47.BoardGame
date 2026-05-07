@@ -19,6 +19,7 @@ namespace ChungToi.View.Editor
     {
         private const string GameObjectName    = "ChungToi Game";
         private const string HudObjectName     = "ChungToi HUD";
+        private const string MenuObjectName    = "ChungToi MainMenu";
         private const string PreviewObjectName = "ChungToi Setup";
 
         // ---- Playable scene ----
@@ -36,24 +37,29 @@ namespace ChungToi.View.Editor
             var controllerGo = FindOrCreate(GameObjectName);
             if (controllerGo.GetComponent<GameController>() == null)
                 controllerGo.AddComponent<GameController>();
+            var controller = controllerGo.GetComponent<GameController>();
+            controller.AutoStart = false; // main menu drives the launch.
 
             var hudGo = FindOrCreate(HudObjectName);
             if (hudGo.GetComponent<Canvas>() == null)
                 hudGo.AddComponent<Canvas>();
             if (hudGo.GetComponent<HudOverlay>() == null)
                 hudGo.AddComponent<HudOverlay>();
+            hudGo.GetComponent<HudOverlay>().Controller = controller;
 
-            // Wire HUD → controller (best-effort; works whether or not the controller already had Awake run).
-            var hud = hudGo.GetComponent<HudOverlay>();
-            var controller = controllerGo.GetComponent<GameController>();
-            hud.Controller = controller;
+            var menuGo = FindOrCreate(MenuObjectName);
+            if (menuGo.GetComponent<Canvas>() == null)
+                menuGo.AddComponent<Canvas>();
+            if (menuGo.GetComponent<MainMenuController>() == null)
+                menuGo.AddComponent<MainMenuController>();
+            menuGo.GetComponent<MainMenuController>().Controller = controller;
 
             EnsureMainCamera();
 
             EditorSceneManager.MarkSceneDirty(scene);
-            Selection.activeObject = controllerGo;
-            EditorGUIUtility.PingObject(controllerGo);
-            Debug.Log($"Set up '{GameObjectName}' + '{HudObjectName}'. Press Play to start a placement-phase game.");
+            Selection.activeObject = menuGo;
+            EditorGUIUtility.PingObject(menuGo);
+            Debug.Log($"Set up '{MenuObjectName}' + '{GameObjectName}' + '{HudObjectName}'. Press Play.");
         }
 
         // ---- Render-only preview (no input) ----

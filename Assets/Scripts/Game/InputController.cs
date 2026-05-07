@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using ChungToi.Core;
 using ChungToi.View;
@@ -11,6 +12,9 @@ namespace ChungToi.Game
     /// just emits "the user clicked cell X" or "the user pressed R" so the listener can decide what
     /// to do. The new Input System is used directly via <see cref="Mouse.current"/> and
     /// <see cref="Keyboard.current"/>; no .inputactions asset wiring required.
+    ///
+    /// Defers to Unity's <see cref="EventSystem"/> when the pointer is over a UI element so menu
+    /// clicks don't bleed through to the board.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class InputController : MonoBehaviour
@@ -29,10 +33,15 @@ namespace ChungToi.Game
         {
             if (RaycastCamera == null) return;
 
-            UpdateHover();
+            bool pointerOverUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+
+            if (pointerOverUi)
+                HoveredCell = null;
+            else
+                UpdateHover();
 
             var mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && HoveredCell.HasValue)
+            if (!pointerOverUi && mouse != null && mouse.leftButton.wasPressedThisFrame && HoveredCell.HasValue)
                 CellLeftClicked?.Invoke(HoveredCell.Value);
 
             var kb = Keyboard.current;

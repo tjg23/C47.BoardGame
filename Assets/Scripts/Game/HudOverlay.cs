@@ -85,8 +85,8 @@ namespace ChungToi.Game
         private static string ComposeStatsLine(GameController c)
         {
             var stats = c.LastAIStats;
-            if (stats == null) return "Press N for new game";
-            return $"Last AI [{c.LastAILabel}]: {stats}   ·   N: new game";
+            if (stats == null) return "N: new game   ·   M: main menu";
+            return $"Last AI [{c.LastAILabel}]: {stats}   ·   N: new game   ·   M: main menu";
         }
 
         // ---- helpers ----

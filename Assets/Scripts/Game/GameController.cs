@@ -15,8 +15,14 @@ namespace ChungToi.Game
     /// for each side. Runs the game loop: ask the side-to-move player for a move, apply, render,
     /// repeat.
     ///
-    /// Per-side <see cref="SideController"/> picks Human or AI for X and O. Step 6 default is
-    /// X = Human, O = AI at depth 3. Press <b>N</b> to start a new game.
+    /// Two startup modes:
+    /// • <see cref="AutoStart"/> = true (default): kicks off a game in <c>Start</c> using whatever
+    ///   field values are set in the Inspector. Convenient for headless / debug runs.
+    /// • <see cref="AutoStart"/> = false: stays idle until <see cref="StartWithConfig"/> or
+    ///   <see cref="StartNewGame"/> is called. The main menu uses this mode.
+    ///
+    /// Hotkeys: <b>N</b> starts a new game with current settings; <b>M</b> raises
+    /// <see cref="MenuRequested"/> so the menu can take over.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GameController : MonoBehaviour
@@ -37,6 +43,10 @@ namespace ChungToi.Game
         public Camera RaycastCamera;
         public float CameraMargin = 1.5f;
 
+        [Header("Lifecycle")]
+        [Tooltip("If true, kicks off a game in Start(). Set false when a main menu drives launch.")]
+        public bool AutoStart = true;
+
         public GameState State { get; private set; }
 
         public IPlayer XPlayer { get; private set; }
@@ -47,6 +57,9 @@ namespace ChungToi.Game
         // Most recent AI search result for display in the HUD. Set after every AI move.
         public SearchStats LastAIStats { get; private set; }
         public string LastAILabel { get; private set; }
+
+        /// <summary>Raised when the user presses M during play. The main menu listens for this.</summary>
+        public event Action MenuRequested;
 
         private BoardView _view;
         private InputController _input;
@@ -65,6 +78,8 @@ namespace ChungToi.Game
         public HumanPlayer CurrentHuman => CurrentPlayer as HumanPlayer;
         public AIPlayer    CurrentAI    => CurrentPlayer as AIPlayer;
 
+        public bool IsRunning => State != null && State.Phase != GamePhase.GameOver;
+
         // ---- lifecycle ----
 
         private void Awake()
@@ -74,15 +89,21 @@ namespace ChungToi.Game
 
         private void Start()
         {
-            StartNewGame();
+            if (AutoStart) StartNewGame();
         }
 
         private void Update()
         {
-            // N = new game. Works mid-game (cancels in-flight AI search) and after game over.
+            // Don't read game-control hotkeys while no game is running (menu is up).
+            if (State == null) return;
+
             var kb = Keyboard.current;
-            if (kb != null && kb.nKey.wasPressedThisFrame)
+            if (kb == null) return;
+
+            if (kb.nKey.wasPressedThisFrame)
                 StartNewGame();
+            if (kb.mKey.wasPressedThisFrame)
+                MenuRequested?.Invoke();
         }
 
         private void OnDestroy()
@@ -97,23 +118,47 @@ namespace ChungToi.Game
 
         // ---- public commands ----
 
+        /// <summary>Apply settings from a <see cref="GameConfig"/> and start a new game.</summary>
+        public void StartWithConfig(GameConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            Size = config.Size;
+            XControl = config.XControl;
+            OControl = config.OControl;
+            AIDepth = config.AIDepth;
+            StartNewGame();
+        }
+
+        /// <summary>Start a new game with the controller's current Size / Control / Depth settings.</summary>
         public void StartNewGame()
         {
-            // Cancel any in-flight loop; the awaiting task's continuation will throw OCE and exit
-            // cleanly. The AI worker (if any) keeps running until done but its result is discarded.
-            _cts?.Cancel();
-            _cts?.Dispose();
-
+            CancelLoop();
             HumanX?.ClearSelection();
             HumanO?.ClearSelection();
             LastAIStats = null;
             LastAILabel = null;
 
-            // Re-bind player slots — lets you flip XControl/OControl in the Inspector and press N.
+            FrameCamera(); // Size may have changed since EnsureSubsystems ran.
             BindPlayerSlots();
 
             _cts = new CancellationTokenSource();
             _ = RunWithErrorHandlingAsync(_cts.Token);
+        }
+
+        /// <summary>
+        /// Cancel any in-flight game loop and clear all transient state. The main menu calls this
+        /// before showing itself, so the next render is a clean slate.
+        /// </summary>
+        public void Stop()
+        {
+            CancelLoop();
+            HumanX?.ClearSelection();
+            HumanO?.ClearSelection();
+            State = null;
+            LastAIStats = null;
+            LastAILabel = null;
+            _highlight?.Clear();
+            if (_view != null) _view.Render(new Board(Size));
         }
 
         // ---- main loop ----
@@ -124,7 +169,7 @@ namespace ChungToi.Game
             {
                 await RunGameAsync(ct);
             }
-            catch (OperationCanceledException) { /* expected on quit/restart */ }
+            catch (OperationCanceledException) { /* expected on quit/restart/menu */ }
             catch (Exception ex)
             {
                 Debug.LogError($"Game loop crashed: {ex}");
@@ -234,8 +279,16 @@ namespace ChungToi.Game
                 _highlight.Show(human.SelectedPiece, human.SlideDestinations, State.Board.Size);
         }
 
+        private void CancelLoop()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+        }
+
         private void FrameCamera()
         {
+            if (RaycastCamera == null || _view == null) return;
             int n = (int)Size;
             float pitch = _view.CellSize + _view.CellGap;
             float halfBoard = n * 0.5f * pitch;
