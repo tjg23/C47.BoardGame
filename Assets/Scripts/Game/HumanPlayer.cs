@@ -230,6 +230,9 @@ namespace ChungToi.Game
             if (!silent && hadSelection) SelectionChanged?.Invoke();
         }
 
+        /// <summary>Public hook for restarts: drop any in-flight selection.</summary>
+        public void ClearSelection() => ResetSelection(silent: false);
+
         private void Complete(Move move)
         {
             var tcs = _tcs;

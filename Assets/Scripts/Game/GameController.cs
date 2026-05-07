@@ -2,7 +2,9 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using ChungToi.Core;
+using ChungToi.AI;
 using ChungToi.View;
 
 namespace ChungToi.Game
@@ -13,15 +15,22 @@ namespace ChungToi.Game
     /// for each side. Runs the game loop: ask the side-to-move player for a move, apply, render,
     /// repeat.
     ///
-    /// Highlight refreshes are driven by <see cref="HumanPlayer.SelectionChanged"/> — both humans'
-    /// events route through a single handler that redraws based on whichever side is currently
-    /// expected to move.
+    /// Per-side <see cref="SideController"/> picks Human or AI for X and O. Step 6 default is
+    /// X = Human, O = AI at depth 3. Press <b>N</b> to start a new game.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GameController : MonoBehaviour
     {
+        public enum SideController { Human, AI }
+
         [Header("Board")]
         public BoardSize Size = BoardSize.ThreeByThree;
+
+        [Header("Players")]
+        public SideController XControl = SideController.Human;
+        public SideController OControl = SideController.AI;
+        [Tooltip("Search depth used by every AIPlayer this controller spawns.")]
+        public int AIDepth = 3;
 
         [Header("Camera")]
         [Tooltip("Falls back to Camera.main if unset.")]
@@ -29,44 +38,51 @@ namespace ChungToi.Game
         public float CameraMargin = 1.5f;
 
         public GameState State { get; private set; }
-        public HumanPlayer HumanX { get; private set; }
-        public HumanPlayer HumanO { get; private set; }
 
         public IPlayer XPlayer { get; private set; }
         public IPlayer OPlayer { get; private set; }
+        public HumanPlayer HumanX { get; private set; }
+        public HumanPlayer HumanO { get; private set; }
+
+        // Most recent AI search result for display in the HUD. Set after every AI move.
+        public SearchStats LastAIStats { get; private set; }
+        public string LastAILabel { get; private set; }
 
         private BoardView _view;
         private InputController _input;
         private HighlightOverlay _highlight;
         private CancellationTokenSource _cts;
 
-        public HumanPlayer CurrentHuman
+        public IPlayer CurrentPlayer
         {
             get
             {
                 if (State == null) return null;
-                var p = State.ToMove == Player.X ? XPlayer : OPlayer;
-                return p as HumanPlayer;
+                return State.ToMove == Player.X ? XPlayer : OPlayer;
             }
         }
+
+        public HumanPlayer CurrentHuman => CurrentPlayer as HumanPlayer;
+        public AIPlayer    CurrentAI    => CurrentPlayer as AIPlayer;
+
+        // ---- lifecycle ----
 
         private void Awake()
         {
             EnsureSubsystems();
         }
 
-        private async void Start()
+        private void Start()
         {
-            _cts = new CancellationTokenSource();
-            try
-            {
-                await RunGameAsync(_cts.Token);
-            }
-            catch (OperationCanceledException) { /* expected on quit */ }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Game loop crashed: {ex}");
-            }
+            StartNewGame();
+        }
+
+        private void Update()
+        {
+            // N = new game. Works mid-game (cancels in-flight AI search) and after game over.
+            var kb = Keyboard.current;
+            if (kb != null && kb.nKey.wasPressedThisFrame)
+                StartNewGame();
         }
 
         private void OnDestroy()
@@ -79,7 +95,41 @@ namespace ChungToi.Game
             HumanO?.Dispose();
         }
 
+        // ---- public commands ----
+
+        public void StartNewGame()
+        {
+            // Cancel any in-flight loop; the awaiting task's continuation will throw OCE and exit
+            // cleanly. The AI worker (if any) keeps running until done but its result is discarded.
+            _cts?.Cancel();
+            _cts?.Dispose();
+
+            HumanX?.ClearSelection();
+            HumanO?.ClearSelection();
+            LastAIStats = null;
+            LastAILabel = null;
+
+            // Re-bind player slots — lets you flip XControl/OControl in the Inspector and press N.
+            BindPlayerSlots();
+
+            _cts = new CancellationTokenSource();
+            _ = RunWithErrorHandlingAsync(_cts.Token);
+        }
+
         // ---- main loop ----
+
+        private async Task RunWithErrorHandlingAsync(CancellationToken ct)
+        {
+            try
+            {
+                await RunGameAsync(ct);
+            }
+            catch (OperationCanceledException) { /* expected on quit/restart */ }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Game loop crashed: {ex}");
+            }
+        }
 
         private async Task RunGameAsync(CancellationToken ct)
         {
@@ -90,12 +140,21 @@ namespace ChungToi.Game
             while (State.Phase != GamePhase.GameOver)
             {
                 ct.ThrowIfCancellationRequested();
-                var current = State.ToMove == Player.X ? XPlayer : OPlayer;
+                var current = CurrentPlayer;
                 var move = await current.ChooseMove(State, ct);
+                ct.ThrowIfCancellationRequested();
 
                 Rules.Apply(State, move);
                 _view.Render(State.Board);
                 RefreshHighlights();
+
+                if (current is AIPlayer ai)
+                {
+                    LastAIStats = ai.LastStats;
+                    LastAILabel = ai.Label;
+                    if (ai.LastStats != null)
+                        Debug.Log($"[{ai.Label}] {ai.LastStats}");
+                }
             }
 
             _highlight.Clear();
@@ -148,14 +207,17 @@ namespace ChungToi.Game
             _input.RaycastCamera = RaycastCamera;
             FrameCamera();
 
-            // Players (Step 4: humans on both sides)
+            // HumanPlayer instances are stable across restarts (they hold input subscriptions).
             HumanX = new HumanPlayer(_input);
             HumanO = new HumanPlayer(_input);
-            XPlayer = HumanX;
-            OPlayer = HumanO;
-
             HumanX.SelectionChanged += OnSelectionChanged;
             HumanO.SelectionChanged += OnSelectionChanged;
+        }
+
+        private void BindPlayerSlots()
+        {
+            XPlayer = XControl == SideController.AI ? new AIPlayer(AIDepth, "AI X") : (IPlayer)HumanX;
+            OPlayer = OControl == SideController.AI ? new AIPlayer(AIDepth, "AI O") : (IPlayer)HumanO;
         }
 
         private void OnSelectionChanged() => RefreshHighlights();

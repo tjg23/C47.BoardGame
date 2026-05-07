@@ -4,6 +4,7 @@
     "references": [
         "ChungToi.Core",
         "ChungToi.View",
+        "ChungToi.AI",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],
