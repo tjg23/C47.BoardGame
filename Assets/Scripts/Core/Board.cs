@@ -15,7 +15,7 @@ namespace ChungToi.Core
 		public static int PiecesPerPlayer(this BoardSize size) => size switch
 		{
 			BoardSize.ThreeByThree => 3,
-			BoardSize.FourByFour => 4,
+			BoardSize.FourByFour => 5,
 			_ => 0
 		};
 	}
